@@ -1,32 +1,141 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local StarterPack = game:GetService("StarterPack")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local character = player.Character or player.CharacterAdded:Wait()
-character:WaitForChild("HumanoidRootPart")
-character:WaitForChild("Humanoid")
+-- ============================================================
+-- ГЛУБОКОЕ КЛОНИРОВАНИЕ TOOL
+-- Копирует: все дочерние объекты, атрибуты, теги, свойства
+-- ============================================================
 
-local currentTool = nil
-local usedValue = nil
-local statusLabel = nil
-local useButton = nil
+local function copyAttributesAndTags(source, dest)
+	-- Копируем все атрибуты
+	for name, value in source:GetAttributes() do
+		dest:SetAttribute(name, value)
+	end
+	-- Копируем все теги
+	for _, tag in source:GetTags() do
+		dest:AddTag(tag)
+	end
+end
 
--- ========== Создание GUI ==========
+local function deepCloneTool(original)
+	if not original or not original:IsA("Tool") then
+		return nil
+	end
+
+	-- Instance:Clone() копирует все дочерние объекты и свойства,
+	-- но НЕ копирует атрибуты и теги — их переносим вручную
+	local clone = original:Clone()
+
+	-- Копируем атрибуты и теги на корневой Tool
+	copyAttributesAndTags(original, clone)
+
+	-- Копируем атрибуты и теги на всех потомков
+	-- Идём по пути от оригинала к клону, чтобы найти пары
+	for _, srcDesc in original:GetDescendants() do
+		-- Строим путь от оригинала до потомка
+		local path = {}
+		local current = srcDesc
+		while current and current ~= original do
+			table.insert(path, 1, current.Name)
+			current = current.Parent
+		end
+
+		-- Ищем того же потомка в клоне
+		local dstDesc = clone
+		for _, segment in path do
+			dstDesc = dstDesc:FindFirstChild(segment)
+			if not dstDesc then break end
+		end
+
+		if dstDesc then
+			copyAttributesAndTags(srcDesc, dstDesc)
+		end
+	end
+
+	return clone
+end
+
+-- ============================================================
+-- ПОИСК TOOL ПО ИМЕНИ
+-- Ищет в: StarterPack, Backpack, Character, Workspace
+-- ============================================================
+
+local function findToolByName(toolName)
+	if not toolName or toolName == "" then return nil end
+
+	local searchLocations = {
+		StarterPack,
+		player:FindFirstChild("Backpack"),
+		player.Character,
+		workspace,
+	}
+
+	local toolNameLower = string.lower(toolName)
+
+	for _, location in searchLocations do
+		if location then
+			for _, descendant in location:GetDescendants() do
+				if descendant:IsA("Tool") and string.lower(descendant.Name) == toolNameLower then
+					return descendant
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+-- ============================================================
+-- ВЫДАЧА КЛОНА TOOL ИГРОКУ
+-- ============================================================
+
+local function giveClonedTool(toolName)
+	local original = findToolByName(toolName)
+	if not original then
+		return false, "Tool '" .. toolName .. "' не найден"
+	end
+
+	local clone = deepCloneTool(original)
+	if not clone then
+		return false, "Не удалось клонировать Tool"
+	end
+
+	-- Выдаём в Backpack (если персонаж жив) или в Character
+	local character = player.Character
+	local backpack = player:FindFirstChild("Backpack")
+
+	if backpack then
+		clone.Parent = backpack
+	elseif character then
+		clone.Parent = character
+	else
+		return false, "Нет Backpack или Character"
+	end
+
+	return true, "Tool '" .. clone.Name .. "' успешно клонирован и выдан!"
+end
+
+-- ============================================================
+-- GUI
+-- ============================================================
+
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ToolGUI"
+screenGui.Name = "ToolClonerGui"
 screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = playerGui
 
--- Главный фрейм (Scale)
+-- Главная рамка
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
-mainFrame.Size = UDim2.new(0.22, 0, 0.16, 0)
-mainFrame.Position = UDim2.new(0.39, 0, 0.4, 0)
-mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
-mainFrame.BackgroundTransparency = 0.15
+mainFrame.Size = UDim2.new(0.24, 0, 0.22, 0)
+mainFrame.Position = UDim2.new(0.38, 0, 0.38, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+mainFrame.BackgroundTransparency = 0.08
 mainFrame.BorderSizePixel = 0
 mainFrame.Parent = screenGui
 
@@ -35,17 +144,17 @@ mainCorner.CornerRadius = UDim.new(0.04, 0)
 mainCorner.Parent = mainFrame
 
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Color = Color3.fromRGB(80, 80, 120)
+mainStroke.Color = Color3.fromRGB(70, 130, 220)
 mainStroke.Thickness = 1.5
-mainStroke.Transparency = 0.5
+mainStroke.Transparency = 0.3
 mainStroke.Parent = mainFrame
 
--- Заголовок (зона перетаскивания)
+-- Заголовок
 local titleBar = Instance.new("Frame")
 titleBar.Name = "TitleBar"
-titleBar.Size = UDim2.new(1, 0, 0.22, 0)
+titleBar.Size = UDim2.new(1, 0, 0.2, 0)
 titleBar.Position = UDim2.new(0, 0, 0, 0)
-titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = mainFrame
 
@@ -54,82 +163,121 @@ titleCorner.CornerRadius = UDim.new(0.04, 0)
 titleCorner.Parent = titleBar
 
 local titleLabel = Instance.new("TextLabel")
-titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.Size = UDim2.new(0.8, 0, 1, 0)
+titleLabel.Position = UDim2.new(0.05, 0, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "Tool Panel"
-titleLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
+titleLabel.Text = "🔧 Tool Cloner"
+titleLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 titleLabel.Parent = titleBar
+
+-- Кнопка сворачивания
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
+minimizeBtn.Position = UDim2.new(0.82, 0, 0.1, 0)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+minimizeBtn.Text = "—"
+minimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextScaled = true
+minimizeBtn.BorderSizePixel = 0
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0.2, 0)
+minCorner.Parent = minimizeBtn
+minimizeBtn.Parent = titleBar
 
 -- Поле ввода имени Tool
 local nameLabel = Instance.new("TextLabel")
-nameLabel.Size = UDim2.new(0.8, 0, 0.12, 0)
-nameLabel.Position = UDim2.new(0.1, 0, 0.28, 0)
+nameLabel.Size = UDim2.new(0.9, 0, 0.14, 0)
+nameLabel.Position = UDim2.new(0.05, 0, 0.26, 0)
 nameLabel.BackgroundTransparency = 1
-nameLabel.Text = "Tool Name:"
-nameLabel.TextColor3 = Color3.fromRGB(160, 160, 190)
+nameLabel.Text = "Имя Tool для клонирования:"
+nameLabel.TextColor3 = Color3.fromRGB(150, 160, 190)
 nameLabel.TextScaled = true
 nameLabel.Font = Enum.Font.Gotham
 nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 nameLabel.Parent = mainFrame
 
 local nameInput = Instance.new("TextBox")
-nameInput.Name = "NameInput"
-nameInput.Size = UDim2.new(0.8, 0, 0.16, 0)
-nameInput.Position = UDim2.new(0.1, 0, 0.4, 0)
-nameInput.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
-nameInput.PlaceholderText = "Enter tool name..."
+nameInput.Name = "ToolNameInput"
+nameInput.Size = UDim2.new(0.9, 0, 0.18, 0)
+nameInput.Position = UDim2.new(0.05, 0, 0.4, 0)
+nameInput.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+nameInput.PlaceholderText = "Например: Chest"
 nameInput.Text = ""
 nameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-nameInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 150)
+nameInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 130)
 nameInput.TextScaled = true
 nameInput.Font = Enum.Font.Gotham
 nameInput.BorderSizePixel = 0
 nameInput.ClearTextOnFocus = false
-nameInput.Parent = mainFrame
-
 local inputCorner = Instance.new("UICorner")
-inputCorner.CornerRadius = UDim.new(0.2, 0)
+inputCorner.CornerRadius = UDim.new(0.15, 0)
 inputCorner.Parent = nameInput
-
 local inputStroke = Instance.new("UIStroke")
-inputStroke.Color = Color3.fromRGB(80, 80, 120)
+inputStroke.Color = Color3.fromRGB(70, 130, 220)
 inputStroke.Thickness = 1
 inputStroke.Transparency = 0.5
 inputStroke.Parent = nameInput
+nameInput.Parent = mainFrame
 
 -- Статус
 local statusLabel = Instance.new("TextLabel")
 statusLabel.Name = "StatusLabel"
-statusLabel.Size = UDim2.new(0.8, 0, 0.12, 0)
-statusLabel.Position = UDim2.new(0.1, 0, 0.6, 0)
+statusLabel.Size = UDim2.new(0.9, 0, 0.12, 0)
+statusLabel.Position = UDim2.new(0.05, 0, 0.6, 0)
 statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "No tool created"
-statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+statusLabel.Text = "Готов к клонированию"
+statusLabel.TextColor3 = Color3.fromRGB(140, 150, 170)
 statusLabel.TextScaled = true
 statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.Parent = mainFrame
 
--- Кнопка Create
-local useButton = Instance.new("TextButton")
-useButton.Name = "CreateButton"
-useButton.Size = UDim2.new(0.6, 0, 0.2, 0)
-useButton.Position = UDim2.new(0.2, 0, 0.76, 0)
-useButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-useButton.Text = "Create Tool"
-useButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-useButton.TextScaled = true
-useButton.Font = Enum.Font.GothamBold
-useButton.BorderSizePixel = 0
-useButton.AutoButtonColor = true
-useButton.Parent = mainFrame
-
+-- Кнопка Clone
+local cloneButton = Instance.new("TextButton")
+cloneButton.Name = "CloneButton"
+cloneButton.Size = UDim2.new(0.55, 0, 0.18, 0)
+cloneButton.Position = UDim2.new(0.225, 0, 0.76, 0)
+cloneButton.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+cloneButton.Text = "Клонировать"
+cloneButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+cloneButton.TextScaled = true
+cloneButton.Font = Enum.Font.GothamBold
+cloneButton.BorderSizePixel = 0
+cloneButton.AutoButtonColor = true
 local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0.3, 0)
-btnCorner.Parent = useButton
+btnCorner.CornerRadius = UDim.new(0.25, 0)
+btnCorner.Parent = cloneButton
+cloneButton.Parent = mainFrame
 
--- ========== Перетаскивание GUI ==========
+-- Сворачиваемая панель (восстановление)
+local restoreBtn = Instance.new("TextButton")
+restoreBtn.Size = UDim2.new(0, 120, 0, 30)
+restoreBtn.Position = UDim2.new(0.01, 0, 0.01, 0)
+restoreBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+restoreBtn.Text = "🔧 Tool Cloner"
+restoreBtn.TextColor3 = Color3.fromRGB(200, 220, 255)
+restoreBtn.Font = Enum.Font.GothamBold
+restoreBtn.TextSize = 12
+restoreBtn.BorderSizePixel = 0
+restoreBtn.Visible = false
+local restoreCorner = Instance.new("UICorner")
+restoreCorner.CornerRadius = UDim.new(0, 6)
+restoreCorner.Parent = restoreBtn
+local restoreStroke = Instance.new("UIStroke")
+restoreStroke.Color = Color3.fromRGB(70, 130, 220)
+restoreStroke.Thickness = 1
+restoreStroke.Transparency = 0.5
+restoreStroke.Parent = restoreBtn
+restoreBtn.Parent = screenGui
+
+-- ============================================================
+-- ПЕРЕТАСКИВАНИЕ GUI
+-- ============================================================
+
 local dragging = false
 local dragInput
 local dragStart
@@ -162,105 +310,76 @@ UserInputService.InputChanged:Connect(function(input)
 		local scaleX = delta.X / viewport.X
 		local scaleY = delta.Y / viewport.Y
 		mainFrame.Position = UDim2.new(
-			startPos.X.Scale + scaleX,
-			0,
-			startPos.Y.Scale + scaleY,
-			0
+			startPos.X.Scale + scaleX, 0,
+			startPos.Y.Scale + scaleY, 0
 		)
 	end
 end)
 
--- ========== Функция создания Tool (после GUI) ==========
-local function createTool(toolName)
-	if currentTool then
-		currentTool.Parent = nil
-		currentTool = nil
-	end
+-- ============================================================
+-- СВОРАЧИВАНИЕ / РАЗВОРАЧИВАНИЕ
+-- ============================================================
 
-	local char = player.Character
-	if not char then return end
-	local humanoid = char:FindFirstChildOfClass("Humanoid")
-	if not humanoid then return end
+minimizeBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
+	restoreBtn.Visible = true
+end)
 
-	local tool = Instance.new("Tool")
-	tool.Name = (toolName ~= "" and toolName) or "Tool"
-	tool.RequiresHandle = true
+restoreBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = true
+	restoreBtn.Visible = false
+end)
 
-	local handle = Instance.new("Part")
-	handle.Name = "Handle"
-	handle.Size = Vector3.new(1, 1, 2)
-	handle.Color = Color3.fromRGB(255, 120, 50)
-	handle.Material = Enum.Material.SmoothPlastic
-	handle.Anchored = false
-	handle.CanCollide = false
-	handle.Massless = true
-	handle.Parent = tool
+-- ============================================================
+-- ЛОГИКА КЛОНИРОВАНИЯ
+-- ============================================================
 
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Brick
-	mesh.Scale = Vector3.new(0.8, 0.8, 1.5)
-	mesh.Parent = handle
-
-	usedValue = Instance.new("BoolValue")
-	usedValue.Name = "used"
-	usedValue.Value = false
-	usedValue.Parent = tool
-
-	tool.Parent = char
-	currentTool = tool
-
-	statusLabel.Text = "Tool: " .. tool.Name .. " | Used: No"
-	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
-	useButton.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
-	useButton.Text = "Use Tool"
-
-	tool.Activated:Connect(function()
-		if usedValue then
-			usedValue.Value = true
-		end
-		statusLabel.Text = "Tool: " .. tool.Name .. " | Used: Yes"
-		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-		useButton.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
-		useButton.Text = "Used!"
-	end)
+local function setSuccess(text)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = Color3.fromRGB(80, 255, 140)
 end
 
--- ========== Логика кнопки ==========
-useButton.MouseButton1Click:Connect(function()
-	if currentTool and not usedValue.Value then
-		-- Tool создан но ещё не использован — помечаем как Used
-		usedValue.Value = true
-		statusLabel.Text = "Tool: " .. currentTool.Name .. " | Used: Yes"
-		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-		useButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-		useButton.Text = "Create Tool"
-		currentTool = nil
-		usedValue = nil
-	else
-		-- Создаём новый Tool с именем из поля ввода
-		local toolName = nameInput.Text
-		createTool(toolName)
-	end
-end)
+local function setError(text)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+end
 
--- Enter в поле ввода тоже создаёт Tool
+local function setWorking(text)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = Color3.fromRGB(200, 200, 100)
+end
+
+local function doClone()
+	local toolName = nameInput.Text
+	if toolName == "" then
+		setError("Введите имя Tool!")
+		return
+	end
+
+	setWorking("Клонирую '" .. toolName .. "'...")
+
+	local success, message = giveClonedTool(toolName)
+	if success then
+		setSuccess(message)
+	else
+		setError(message)
+	end
+end
+
+cloneButton.MouseButton1Click:Connect(doClone)
+
 nameInput.FocusLost:Connect(function(enterPressed)
 	if enterPressed then
-		createTool(nameInput.Text)
+		doClone()
 	end
 end)
 
--- ========== Респаун персонажа ==========
-player.CharacterAdded:Connect(function(newChar)
-	character = newChar
-	newChar:WaitForChild("Humanoid")
+-- ============================================================
+-- РЕСПАУН ПЕРСОНАЖА
+-- ============================================================
 
-	-- Сброс состояния
-	currentTool = nil
-	usedValue = nil
-	statusLabel.Text = "No tool created"
-	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
-	useButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-	useButton.Text = "Create Tool"
+player.CharacterAdded:Connect(function()
+	statusLabel.Text = "Готов к клонированию"
+	statusLabel.TextColor3 = Color3.fromRGB(140, 150, 170)
 	nameInput.Text = ""
 end)
