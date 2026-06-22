@@ -202,7 +202,7 @@ local function createTool(toolName)
 	mesh.Parent = handle
 
 	usedValue = Instance.new("BoolValue")
-	usedValue.Name = "Used"
+	usedValue.Name = "used"
 	usedValue.Value = false
 	usedValue.Parent = tool
 
@@ -227,30 +227,26 @@ end
 
 -- ========== Логика кнопки ==========
 useButton.MouseButton1Click:Connect(function()
-	if currentTool then
-		-- Tool уже создан — помечаем как Used
-		if usedValue then
-			usedValue.Value = true
-		end
+	if currentTool and not usedValue.Value then
+		-- Tool создан но ещё не использован — помечаем как Used
+		usedValue.Value = true
 		statusLabel.Text = "Tool: " .. currentTool.Name .. " | Used: Yes"
 		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
-		useButton.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
-		useButton.Text = "Used!"
+		useButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+		useButton.Text = "Create Tool"
+		currentTool = nil
+		usedValue = nil
 	else
-		-- Создаём Tool с именем из поля ввода
+		-- Создаём новый Tool с именем из поля ввода
 		local toolName = nameInput.Text
 		createTool(toolName)
-		useButton.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
-		useButton.Text = "Use Tool"
 	end
 end)
 
 -- Enter в поле ввода тоже создаёт Tool
 nameInput.FocusLost:Connect(function(enterPressed)
-	if enterPressed and not currentTool then
+	if enterPressed then
 		createTool(nameInput.Text)
-		useButton.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
-		useButton.Text = "Use Tool"
 	end
 end)
 
