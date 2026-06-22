@@ -1,0 +1,111 @@
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local StarterPack = game:GetService("StarterPack")
+
+-- Создаём RemoteEvent автоматически, если его нет
+local cloneToolEvent = ReplicatedStorage:FindFirstChild("CloneToolEvent")
+if not cloneToolEvent then
+	cloneToolEvent = Instance.new("RemoteEvent")
+	cloneToolEvent.Name = "CloneToolEvent"
+	cloneToolEvent.Parent = ReplicatedStorage
+end
+
+-- Глубокое клонирование Tool с атрибутами и тегами
+local function copyAttributesAndTags(source, dest)
+	for name, value in source:GetAttributes() do
+		dest:SetAttribute(name, value)
+	end
+	for _, tag in source:GetTags() do
+		dest:AddTag(tag)
+	end
+end
+
+local function deepCloneTool(original)
+	if not original or not original:IsA("Tool") then
+		return nil
+	end
+
+	local clone = original:Clone()
+
+	-- Атрибуты и теги на корневом Tool
+	copyAttributesAndTags(original, clone)
+
+	-- Атрибуты и теги на всех потомках
+	for _, srcDesc in original:GetDescendants() do
+		local path = {}
+		local current = srcDesc
+		while current and current ~= original do
+			table.insert(path, 1, current.Name)
+			current = current.Parent
+		end
+
+		local dstDesc = clone
+		for _, segment in path do
+			dstDesc = dstDesc:FindFirstChild(segment)
+			if not dstDesc then break end
+		end
+
+		if dstDesc then
+			copyAttributesAndTags(srcDesc, dstDesc)
+		end
+	end
+
+	return clone
+end
+
+-- Поиск Tool по имени на сервере
+local function findToolByName(toolName)
+	if not toolName or toolName == "" then return nil end
+
+	local searchLocations = {
+		StarterPack,
+		workspace,
+	}
+
+	-- Также ищем в Backpack'ах всех игроков
+	for _, p in Players:GetPlayers() do
+		local bp = p:FindFirstChild("Backpack")
+		if bp then
+			table.insert(searchLocations, bp)
+		end
+	end
+
+	local toolNameLower = string.lower(toolName)
+
+	for _, location in searchLocations do
+		if location then
+			for _, descendant in location:GetDescendants() do
+				if descendant:IsA("Tool") and string.lower(descendant.Name) == toolNameLower then
+					return descendant
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+-- Обработка запроса от клиента
+cloneToolEvent.OnServerEvent:Connect(function(player, toolName)
+	local original = findToolByName(toolName)
+	if not original then
+		cloneToolEvent:FireClient(player, false, "Tool '" .. toolName .. "' не найден на сервере")
+		return
+	end
+
+	local clone = deepCloneTool(original)
+	if not clone then
+		cloneToolEvent:FireClient(player, false, "Не удалось клонировать Tool")
+		return
+	end
+
+	-- Выдаём в Backpack игрока
+	local backpack = player:FindFirstChild("Backpack")
+	if backpack then
+		clone.Parent = backpack
+	else
+		clone.Parent = player.Character or workspace
+	end
+
+	cloneToolEvent:FireClient(player, true, "Tool '" .. clone.Name .. "' клонирован и выдан сервером!")
+end)
