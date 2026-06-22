@@ -1,85 +1,270 @@
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
 local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- Ждём загрузки персонажа
-local function getCharacter()
-	local char = player.Character
-	if char and char:FindFirstChild("HumanoidRootPart") then
-		return char
-	end
-	return nil
-end
+local character = player.Character or player.CharacterAdded:Wait()
+character:WaitForChild("HumanoidRootPart")
+character:WaitForChild("Humanoid")
 
--- Создание GUI
+local currentTool = nil
+local usedValue = nil
+local statusLabel = nil
+local useButton = nil
+
+-- ========== Создание GUI ==========
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ToolCreatorGui"
+screenGui.Name = "ToolGUI"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
 
-local frame = Instance.new("Frame")
-frame.Name = "MainFrame"
-frame.Size = UDim2.new(0, 200, 0, 60)
-frame.Position = UDim2.new(0.5, -100, 0, 20)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-frame.BorderSizePixel = 0
-frame.Parent = screenGui
+-- Главный фрейм (Scale)
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0.22, 0, 0.16, 0)
+mainFrame.Position = UDim2.new(0.39, 0, 0.4, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = frame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0.04, 0)
+mainCorner.Parent = mainFrame
 
-local button = Instance.new("TextButton")
-button.Name = "GiveToolBtn"
-button.Size = UDim2.new(1, -20, 1, -20)
-button.Position = UDim2.new(0, 10, 0, 10)
-button.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-button.TextColor3 = Color3.new(1, 1, 1)
-button.Text = "Get Tool"
-button.Font = Enum.Font.GothamBold
-button.TextSize = 18
-button.BorderSizePixel = 0
-button.AutoButtonColor = true
-button.Parent = frame
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(80, 80, 120)
+mainStroke.Thickness = 1.5
+mainStroke.Transparency = 0.5
+mainStroke.Parent = mainFrame
+
+-- Заголовок (зона перетаскивания)
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0.22, 0)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0.04, 0)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "Tool Panel"
+titleLabel.TextColor3 = Color3.fromRGB(220, 220, 255)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Parent = titleBar
+
+-- Поле ввода имени Tool
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(0.8, 0, 0.12, 0)
+nameLabel.Position = UDim2.new(0.1, 0, 0.28, 0)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Text = "Tool Name:"
+nameLabel.TextColor3 = Color3.fromRGB(160, 160, 190)
+nameLabel.TextScaled = true
+nameLabel.Font = Enum.Font.Gotham
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Parent = mainFrame
+
+local nameInput = Instance.new("TextBox")
+nameInput.Name = "NameInput"
+nameInput.Size = UDim2.new(0.8, 0, 0.16, 0)
+nameInput.Position = UDim2.new(0.1, 0, 0.4, 0)
+nameInput.BackgroundColor3 = Color3.fromRGB(45, 45, 65)
+nameInput.PlaceholderText = "Enter tool name..."
+nameInput.Text = ""
+nameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+nameInput.PlaceholderColor3 = Color3.fromRGB(120, 120, 150)
+nameInput.TextScaled = true
+nameInput.Font = Enum.Font.Gotham
+nameInput.BorderSizePixel = 0
+nameInput.ClearTextOnFocus = false
+nameInput.Parent = mainFrame
+
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0.2, 0)
+inputCorner.Parent = nameInput
+
+local inputStroke = Instance.new("UIStroke")
+inputStroke.Color = Color3.fromRGB(80, 80, 120)
+inputStroke.Thickness = 1
+inputStroke.Transparency = 0.5
+inputStroke.Parent = nameInput
+
+-- Статус
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0.8, 0, 0.12, 0)
+statusLabel.Position = UDim2.new(0.1, 0, 0.6, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "No tool created"
+statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = mainFrame
+
+-- Кнопка Create
+local useButton = Instance.new("TextButton")
+useButton.Name = "CreateButton"
+useButton.Size = UDim2.new(0.6, 0, 0.2, 0)
+useButton.Position = UDim2.new(0.2, 0, 0.76, 0)
+useButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+useButton.Text = "Create Tool"
+useButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+useButton.TextScaled = true
+useButton.Font = Enum.Font.GothamBold
+useButton.BorderSizePixel = 0
+useButton.AutoButtonColor = true
+useButton.Parent = mainFrame
 
 local btnCorner = Instance.new("UICorner")
-btnCorner.CornerRadius = UDim.new(0, 6)
-btnCorner.Parent = button
+btnCorner.CornerRadius = UDim.new(0.3, 0)
+btnCorner.Parent = useButton
 
--- Функция создания Tool с нуля
-local function createTool()
-	local char = getCharacter()
-	if not char then
-		warn("Character not found!")
-		return
+-- ========== Перетаскивание GUI ==========
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		local viewport = workspace.CurrentCamera.ViewportSize
+		local scaleX = delta.X / viewport.X
+		local scaleY = delta.Y / viewport.Y
+		mainFrame.Position = UDim2.new(
+			startPos.X.Scale + scaleX,
+			0,
+			startPos.Y.Scale + scaleY,
+			0
+		)
+	end
+end)
+
+-- ========== Функция создания Tool (после GUI) ==========
+local function createTool(toolName)
+	if currentTool then
+		currentTool.Parent = nil
+		currentTool = nil
 	end
 
-	-- Создаём Tool
-	local tool = Instance.new("Tool")
-	tool.Name = "Wood"
-	tool.RequiresHandle = true
-	tool.CanBeDropped = true
+	local char = player.Character
+	if not char then return end
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
 
-	-- Создаём Handle (обязательная часть Tool)
+	local tool = Instance.new("Tool")
+	tool.Name = (toolName ~= "" and toolName) or "Tool"
+	tool.RequiresHandle = true
+
 	local handle = Instance.new("Part")
 	handle.Name = "Handle"
-	handle.Size = Vector3.new(1, 1, 3)
-	handle.Color = Color3.fromRGB(0, 120, 255)
-	handle.Material = Enum.Material.Neon
+	handle.Size = Vector3.new(1, 1, 2)
+	handle.Color = Color3.fromRGB(255, 120, 50)
+	handle.Material = Enum.Material.SmoothPlastic
 	handle.Anchored = false
 	handle.CanCollide = false
+	handle.Massless = true
 	handle.Parent = tool
 
-	-- Добавляем Mesh для визуала
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.Brick
-	mesh.Scale = Vector3.new(1, 1, 1)
+	mesh.Scale = Vector3.new(0.8, 0.8, 1.5)
 	mesh.Parent = handle
 
-	-- Вешаем Tool на персонажа
+	usedValue = Instance.new("BoolValue")
+	usedValue.Name = "Used"
+	usedValue.Value = false
+	usedValue.Parent = tool
+
 	tool.Parent = char
+	currentTool = tool
+
+	statusLabel.Text = "Tool: " .. tool.Name .. " | Used: No"
+	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+	useButton.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+	useButton.Text = "Use Tool"
+
+	tool.Activated:Connect(function()
+		if usedValue then
+			usedValue.Value = true
+		end
+		statusLabel.Text = "Tool: " .. tool.Name .. " | Used: Yes"
+		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
+		useButton.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
+		useButton.Text = "Used!"
+	end)
 end
 
--- Обработка нажатия кнопки
-button.MouseButton1Click:Connect(function()
-	createTool()
+-- ========== Логика кнопки ==========
+useButton.MouseButton1Click:Connect(function()
+	if currentTool then
+		-- Tool уже создан — помечаем как Used
+		if usedValue then
+			usedValue.Value = true
+		end
+		statusLabel.Text = "Tool: " .. currentTool.Name .. " | Used: Yes"
+		statusLabel.TextColor3 = Color3.fromRGB(0, 255, 120)
+		useButton.BackgroundColor3 = Color3.fromRGB(160, 50, 50)
+		useButton.Text = "Used!"
+	else
+		-- Создаём Tool с именем из поля ввода
+		local toolName = nameInput.Text
+		createTool(toolName)
+		useButton.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+		useButton.Text = "Use Tool"
+	end
+end)
+
+-- Enter в поле ввода тоже создаёт Tool
+nameInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed and not currentTool then
+		createTool(nameInput.Text)
+		useButton.BackgroundColor3 = Color3.fromRGB(0, 150, 80)
+		useButton.Text = "Use Tool"
+	end
+end)
+
+-- ========== Респаун персонажа ==========
+player.CharacterAdded:Connect(function(newChar)
+	character = newChar
+	newChar:WaitForChild("Humanoid")
+
+	-- Сброс состояния
+	currentTool = nil
+	usedValue = nil
+	statusLabel.Text = "No tool created"
+	statusLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+	useButton.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+	useButton.Text = "Create Tool"
+	nameInput.Text = ""
 end)
