@@ -1,0 +1,85 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Ждём загрузки персонажа
+local function getCharacter()
+	local char = player.Character
+	if char and char:FindFirstChild("HumanoidRootPart") then
+		return char
+	end
+	return nil
+end
+
+-- Создание GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ToolCreatorGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0, 200, 0, 60)
+frame.Position = UDim2.new(0.5, -100, 0, 20)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local button = Instance.new("TextButton")
+button.Name = "GiveToolBtn"
+button.Size = UDim2.new(1, -20, 1, -20)
+button.Position = UDim2.new(0, 10, 0, 10)
+button.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+button.TextColor3 = Color3.new(1, 1, 1)
+button.Text = "Get Tool"
+button.Font = Enum.Font.GothamBold
+button.TextSize = 18
+button.BorderSizePixel = 0
+button.AutoButtonColor = true
+button.Parent = frame
+
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0, 6)
+btnCorner.Parent = button
+
+-- Функция создания Tool с нуля
+local function createTool()
+	local char = getCharacter()
+	if not char then
+		warn("Character not found!")
+		return
+	end
+
+	-- Создаём Tool
+	local tool = Instance.new("Tool")
+	tool.Name = "Wood"
+	tool.RequiresHandle = true
+	tool.CanBeDropped = true
+
+	-- Создаём Handle (обязательная часть Tool)
+	local handle = Instance.new("Part")
+	handle.Name = "Handle"
+	handle.Size = Vector3.new(1, 1, 3)
+	handle.Color = Color3.fromRGB(0, 120, 255)
+	handle.Material = Enum.Material.Neon
+	handle.Anchored = false
+	handle.CanCollide = false
+	handle.Parent = tool
+
+	-- Добавляем Mesh для визуала
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Brick
+	mesh.Scale = Vector3.new(1, 1, 1)
+	mesh.Parent = handle
+
+	-- Вешаем Tool на персонажа
+	tool.Parent = char
+end
+
+-- Обработка нажатия кнопки
+button.MouseButton1Click:Connect(function()
+	createTool()
+end)
