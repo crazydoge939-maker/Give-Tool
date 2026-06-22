@@ -1,0 +1,327 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local StarterPack = game:GetService("StarterPack")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local cloneToolEvent = ReplicatedStorage:WaitForChild("CloneToolEvent")
+
+-- ============================================================
+-- ПОИСК TOOL ПО ИМЕНИ (для предпросмотра на клиенте)
+-- ============================================================
+
+local function findToolByName(toolName)
+	if not toolName or toolName == "" then return nil end
+
+	local searchLocations = {
+		StarterPack,
+		player:FindFirstChild("Backpack"),
+		player.Character,
+		workspace,
+	}
+
+	local toolNameLower = string.lower(toolName)
+
+	for _, location in searchLocations do
+		if location then
+			for _, descendant in location:GetDescendants() do
+				if descendant:IsA("Tool") and string.lower(descendant.Name) == toolNameLower then
+					return descendant
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+-- ============================================================
+-- ОТПРАВКА ЗАПРОСА НА СЕРВЕР ЧЕРЕЗ REMOTEEVENT
+-- ============================================================
+
+local function giveClonedTool(toolName)
+	-- Проверяем, что Tool существует (предпросмотр на клиенте)
+	local preview = findToolByName(toolName)
+	if not preview then
+		return false, "Tool '" .. toolName .. "' не найден"
+	end
+
+	-- Отправляем запрос на сервер — сервер клонирует и выдаст Tool
+	cloneToolEvent:FireServer(toolName)
+	return true, "Запрос отправлен на сервер..."
+end
+
+-- ============================================================
+-- GUI
+-- ============================================================
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ToolClonerGui"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = playerGui
+
+-- Главная рамка
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainFrame"
+mainFrame.Size = UDim2.new(0.24, 0, 0.22, 0)
+mainFrame.Position = UDim2.new(0.38, 0, 0.38, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+mainFrame.BackgroundTransparency = 0.08
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0.04, 0)
+mainCorner.Parent = mainFrame
+
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(70, 130, 220)
+mainStroke.Thickness = 1.5
+mainStroke.Transparency = 0.3
+mainStroke.Parent = mainFrame
+
+-- Заголовок
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1, 0, 0.2, 0)
+titleBar.Position = UDim2.new(0, 0, 0, 0)
+titleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0.04, 0)
+titleCorner.Parent = titleBar
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0.8, 0, 1, 0)
+titleLabel.Position = UDim2.new(0.05, 0, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "🔧 Tool Cloner"
+titleLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
+
+-- Кнопка сворачивания
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0.15, 0, 0.8, 0)
+minimizeBtn.Position = UDim2.new(0.82, 0, 0.1, 0)
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
+minimizeBtn.Text = "—"
+minimizeBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.TextScaled = true
+minimizeBtn.BorderSizePixel = 0
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0.2, 0)
+minCorner.Parent = minimizeBtn
+minimizeBtn.Parent = titleBar
+
+-- Поле ввода имени Tool
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Size = UDim2.new(0.9, 0, 0.14, 0)
+nameLabel.Position = UDim2.new(0.05, 0, 0.26, 0)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Text = "Имя Tool для клонирования:"
+nameLabel.TextColor3 = Color3.fromRGB(150, 160, 190)
+nameLabel.TextScaled = true
+nameLabel.Font = Enum.Font.Gotham
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.Parent = mainFrame
+
+local nameInput = Instance.new("TextBox")
+nameInput.Name = "ToolNameInput"
+nameInput.Size = UDim2.new(0.9, 0, 0.18, 0)
+nameInput.Position = UDim2.new(0.05, 0, 0.4, 0)
+nameInput.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+nameInput.PlaceholderText = "Например: Chest"
+nameInput.Text = ""
+nameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+nameInput.PlaceholderColor3 = Color3.fromRGB(100, 100, 130)
+nameInput.TextScaled = true
+nameInput.Font = Enum.Font.Gotham
+nameInput.BorderSizePixel = 0
+nameInput.ClearTextOnFocus = false
+local inputCorner = Instance.new("UICorner")
+inputCorner.CornerRadius = UDim.new(0.15, 0)
+inputCorner.Parent = nameInput
+local inputStroke = Instance.new("UIStroke")
+inputStroke.Color = Color3.fromRGB(70, 130, 220)
+inputStroke.Thickness = 1
+inputStroke.Transparency = 0.5
+inputStroke.Parent = nameInput
+nameInput.Parent = mainFrame
+
+-- Статус
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Name = "StatusLabel"
+statusLabel.Size = UDim2.new(0.9, 0, 0.12, 0)
+statusLabel.Position = UDim2.new(0.05, 0, 0.6, 0)
+statusLabel.BackgroundTransparency = 1
+statusLabel.Text = "Готов к клонированию"
+statusLabel.TextColor3 = Color3.fromRGB(140, 150, 170)
+statusLabel.TextScaled = true
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+statusLabel.Parent = mainFrame
+
+-- Кнопка Clone
+local cloneButton = Instance.new("TextButton")
+cloneButton.Name = "CloneButton"
+cloneButton.Size = UDim2.new(0.55, 0, 0.18, 0)
+cloneButton.Position = UDim2.new(0.225, 0, 0.76, 0)
+cloneButton.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
+cloneButton.Text = "Клонировать"
+cloneButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+cloneButton.TextScaled = true
+cloneButton.Font = Enum.Font.GothamBold
+cloneButton.BorderSizePixel = 0
+cloneButton.AutoButtonColor = true
+local btnCorner = Instance.new("UICorner")
+btnCorner.CornerRadius = UDim.new(0.25, 0)
+btnCorner.Parent = cloneButton
+cloneButton.Parent = mainFrame
+
+-- Сворачиваемая панель (восстановление)
+local restoreBtn = Instance.new("TextButton")
+restoreBtn.Size = UDim2.new(0, 120, 0, 30)
+restoreBtn.Position = UDim2.new(0.01, 0, 0.01, 0)
+restoreBtn.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
+restoreBtn.Text = "🔧 Tool Cloner"
+restoreBtn.TextColor3 = Color3.fromRGB(200, 220, 255)
+restoreBtn.Font = Enum.Font.GothamBold
+restoreBtn.TextSize = 12
+restoreBtn.BorderSizePixel = 0
+restoreBtn.Visible = false
+local restoreCorner = Instance.new("UICorner")
+restoreCorner.CornerRadius = UDim.new(0, 6)
+restoreCorner.Parent = restoreBtn
+local restoreStroke = Instance.new("UIStroke")
+restoreStroke.Color = Color3.fromRGB(70, 130, 220)
+restoreStroke.Thickness = 1
+restoreStroke.Transparency = 0.5
+restoreStroke.Parent = restoreBtn
+restoreBtn.Parent = screenGui
+
+-- ============================================================
+-- ПЕРЕТАСКИВАНИЕ GUI
+-- ============================================================
+
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+titleBar.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = mainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+titleBar.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		dragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == dragInput and dragging then
+		local delta = input.Position - dragStart
+		local viewport = workspace.CurrentCamera.ViewportSize
+		local scaleX = delta.X / viewport.X
+		local scaleY = delta.Y / viewport.Y
+		mainFrame.Position = UDim2.new(
+			startPos.X.Scale + scaleX, 0,
+			startPos.Y.Scale + scaleY, 0
+		)
+	end
+end)
+
+-- ============================================================
+-- СВОРАЧИВАНИЕ / РАЗВОРАЧИВАНИЕ
+-- ============================================================
+
+minimizeBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = false
+	restoreBtn.Visible = true
+end)
+
+restoreBtn.MouseButton1Click:Connect(function()
+	mainFrame.Visible = true
+	restoreBtn.Visible = false
+end)
+
+-- ============================================================
+-- ЛОГИКА КЛОНИРОВАНИЯ
+-- ============================================================
+
+local function setSuccess(text)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = Color3.fromRGB(80, 255, 140)
+end
+
+local function setError(text)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = Color3.fromRGB(255, 90, 90)
+end
+
+local function setWorking(text)
+	statusLabel.Text = text
+	statusLabel.TextColor3 = Color3.fromRGB(200, 200, 100)
+end
+
+local function doClone()
+	local toolName = nameInput.Text
+	if toolName == "" then
+		setError("Введите имя Tool!")
+		return
+	end
+
+	setWorking("Клонирую '" .. toolName .. "'...")
+
+	local success, message = giveClonedTool(toolName)
+	if success then
+		setSuccess(message)
+	else
+		setError(message)
+	end
+end
+
+-- Получаем ответ от сервера
+cloneToolEvent.OnClientEvent:Connect(function(success, message)
+	if success then
+		setSuccess(message)
+	else
+		setError(message)
+	end
+end)
+
+cloneButton.MouseButton1Click:Connect(doClone)
+
+nameInput.FocusLost:Connect(function(enterPressed)
+	if enterPressed then
+		doClone()
+	end
+end)
+
+-- ============================================================
+-- РЕСПАУН ПЕРСОНАЖА
+-- ============================================================
+
+player.CharacterAdded:Connect(function()
+	statusLabel.Text = "Готов к клонированию"
+	statusLabel.TextColor3 = Color3.fromRGB(140, 150, 170)
+	nameInput.Text = ""
+end)
